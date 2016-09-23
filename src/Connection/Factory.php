@@ -173,12 +173,33 @@ class Factory implements FactoryInterface
     {
         $parameters = $connection->getParameters();
 
+        $this->prepareConnectionPassword($connection, $parameters);
+        $this->prepareConnectionDatabase($connection, $parameters);
+    }
+
+    /**
+     * Prepares a connection instance password
+     *
+     * @param NodeConnectionInterface $connection
+     * @param ParametersInterface $parameters
+     */
+    protected function prepareConnectionPassword(NodeConnectionInterface $connection, ParametersInterface $parameters)
+    {
         if (isset($parameters->password)) {
             $connection->addConnectCommand(
                 new RawCommand(array('AUTH', $parameters->password))
             );
         }
+    }
 
+    /**
+     * Prepares a connection instance database
+     *
+     * @param NodeConnectionInterface $connection
+     * @param ParametersInterface $parameters
+     */
+    protected function prepareConnectionDatabase(NodeConnectionInterface $connection, ParametersInterface $parameters)
+    {
         if (isset($parameters->database)) {
             $connection->addConnectCommand(
                 new RawCommand(array('SELECT', $parameters->database))

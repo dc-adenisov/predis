@@ -55,6 +55,11 @@ class SentinelReplication implements ReplicationInterface
     protected $connectionFactory;
 
     /**
+     * @var ConnectionFactoryInterface
+     */
+    protected $sentinelConnectionFactory;
+
+    /**
      * @var ReplicationStrategy
      */
     protected $strategy;
@@ -101,20 +106,23 @@ class SentinelReplication implements ReplicationInterface
     protected $updateSentinels = false;
 
     /**
-     * @param string                     $service           Name of the service for autodiscovery.
-     * @param array                      $sentinels         Sentinel servers connection parameters.
-     * @param ConnectionFactoryInterface $connectionFactory Connection factory instance.
-     * @param ReplicationStrategy        $strategy          Replication strategy instance.
+     * @param string                     $service                   Name of the service for autodiscovery.
+     * @param array                      $sentinels                 Sentinel servers connection parameters.
+     * @param ConnectionFactoryInterface $connectionFactory         Connection factory instance.
+     * @param ConnectionFactoryInterface $sentinelConnectionFactory Connection factory instance.
+     * @param ReplicationStrategy        $strategy                  Replication strategy instance.
      */
     public function __construct(
         $service,
         array $sentinels,
         ConnectionFactoryInterface $connectionFactory,
+        ConnectionFactoryInterface $sentinelConnectionFactory,
         ReplicationStrategy $strategy = null
     ) {
         $this->sentinels = $sentinels;
         $this->service = $service;
         $this->connectionFactory = $connectionFactory;
+        $this->sentinelConnectionFactory = $sentinelConnectionFactory;
         $this->strategy = $strategy ?: new ReplicationStrategy();
     }
 
@@ -239,17 +247,12 @@ class SentinelReplication implements ReplicationInterface
         }
 
         if (is_array($parameters)) {
-            // We explicitly set "database" and "password" to null,
-            // so that no AUTH and SELECT command is send to the sentinels.
-            $parameters['database'] = null;
-            $parameters['password'] = null;
-
             if (!isset($parameters['timeout'])) {
                 $parameters['timeout'] = $this->sentinelTimeout;
             }
         }
 
-        $connection = $this->connectionFactory->create($parameters);
+        $connection = $this->sentinelConnectionFactory->create($parameters);
 
         return $connection;
     }
@@ -355,11 +358,15 @@ class SentinelReplication implements ReplicationInterface
             $this->handleSentinelErrorResponse($sentinel, $payload);
         }
 
-        return array(
-            'host' => $payload[0],
-            'port' => $payload[1],
-            'alias' => 'master',
-        );
+        return
+            array_merge(
+                $sentinel->getParameters()->toArray(),
+                array(
+                    'host' => $payload[0],
+                    'port' => $payload[1],
+                    'alias' => 'master',
+                )
+            );
     }
 
     /**
@@ -389,11 +396,15 @@ class SentinelReplication implements ReplicationInterface
                 continue;
             }
 
-            $slaves[] = array(
-                'host' => $slave[3],
-                'port' => $slave[5],
-                'alias' => "slave-$slave[1]",
-            );
+            $slaves[] =
+                array_merge(
+                    $sentinel->getParameters()->toArray(),
+                    array(
+                        'host' => $slave[3],
+                        'port' => $slave[5],
+                        'alias' => "slave-$slave[1]",
+                    )
+                );
         }
 
         return $slaves;
@@ -515,7 +526,7 @@ class SentinelReplication implements ReplicationInterface
     /**
      * Asserts that the specified connection matches an expected role.
      *
-     * @param NodeConnectionInterface $sentinel Connection to a redis server.
+     * @param NodeConnectionInterface $connection Connection to a redis server.
      * @param string                  $role     Expected role of the server ("master", "slave" or "sentinel").
      */
     protected function assertConnectionRole(NodeConnectionInterface $connection, $role)
@@ -714,7 +725,7 @@ class SentinelReplication implements ReplicationInterface
     public function __sleep()
     {
         return array(
-            'master', 'slaves', 'service', 'sentinels', 'connectionFactory', 'strategy',
+            'master', 'slaves', 'service', 'sentinels', 'connectionFactory', 'sentinelConnectionFactory', 'strategy',
         );
     }
 }

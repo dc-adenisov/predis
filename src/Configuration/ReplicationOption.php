@@ -14,6 +14,7 @@ namespace Predis\Configuration;
 use Predis\Connection\Aggregate\MasterSlaveReplication;
 use Predis\Connection\Aggregate\ReplicationInterface;
 use Predis\Connection\Aggregate\SentinelReplication;
+use Predis\Connection\FactorySentinel;
 
 /**
  * Configures an aggregate connection used for master/slave replication among
@@ -42,7 +43,10 @@ class ReplicationOption implements OptionInterface
 
         if ($value === 'sentinel') {
             return function ($sentinels, $options) {
-                return new SentinelReplication($options->service, $sentinels, $options->connections);
+                $sentinelFactory = new FactorySentinel();
+                $sentinelFactory->setDefaultParameters($options->connections->getDefaultParameters());
+
+                return new SentinelReplication($options->service, $sentinels, $options->connections, $sentinelFactory);
             };
         }
 
